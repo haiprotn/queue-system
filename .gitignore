@@ -1,0 +1,5 @@
+lib/
+*.mpy
+tts_cache/
+queue_state.json
+__pycache__/

@@ -5,9 +5,10 @@ Nhân viên bấm gọi số trực tiếp
 Chạy trên Raspberry Pi 3 với Flask + Socket.IO
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 from flask_socketio import SocketIO, emit
 from datetime import datetime
+from gtts import gTTS
 import json
 import os
 
@@ -23,6 +24,8 @@ queue_data = {
 }
 
 DATA_FILE = "queue_state.json"
+TTS_CACHE_DIR = "tts_cache"
+os.makedirs(TTS_CACHE_DIR, exist_ok=True)
 
 def save_state():
     with open(DATA_FILE, 'w') as f:
@@ -135,6 +138,18 @@ def reset():
 @app.route('/api/status')
 def status():
     return jsonify(get_info())
+
+
+@app.route('/api/tts/<int:number>')
+def tts(number):
+    cache_path = os.path.join(TTS_CACHE_DIR, f"so_{number}.mp3")
+    if not os.path.exists(cache_path):
+        digit_names = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín']
+        padded = str(number).zfill(3)
+        digits = ' '.join(digit_names[int(d)] for d in padded)
+        text = f"Mời bệnh nhân số {digits}. Mời bệnh nhân số {digits}, vui lòng đến phòng khám."
+        gTTS(text=text, lang='vi', slow=False).save(cache_path)
+    return send_file(cache_path, mimetype='audio/mpeg')
 
 
 def get_info():

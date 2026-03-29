@@ -274,27 +274,9 @@
         }
 
         function speakNumber(number) {
-            if (!('speechSynthesis' in window)) return;
-
-            const padded = String(number).padStart(3, '0');
-            const digitNames = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
-            const digits = padded.split('').map(d => digitNames[parseInt(d)]).join(' ');
-
-            const text = `Mời bệnh nhân số ${digits}. Mời bệnh nhân số ${digits}, vui lòng đến phòng khám.`;
-
-            window.speechSynthesis.cancel();
             setTimeout(() => {
-                const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'vi-VN';
-                u.rate = 0.85;
-                u.pitch = 1.0;
-                u.volume = 1.0;
-
-                const voices = window.speechSynthesis.getVoices();
-                const vi = voices.find(v => v.lang.startsWith('vi'));
-                if (vi) u.voice = vi;
-
-                window.speechSynthesis.speak(u);
+                const audio = new Audio(`/api/tts/${number}`);
+                audio.play();
             }, 1200);
         }
 
@@ -345,10 +327,6 @@
 
         // Load
         fetch('/api/status').then(r => r.json()).then(updateDisplay);
-        if ('speechSynthesis' in window) {
-            speechSynthesis.getVoices();
-            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
-        }
     </script>
 </body>
 </html>
