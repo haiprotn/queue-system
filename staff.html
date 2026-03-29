@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gọi Số Thứ Tự</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            min-height: 100vh;
+            background: #0b1120;
+            color: #fff;
+            padding: 1.2rem;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex; align-items: center; gap: .6rem;
+            margin-bottom: 1.5rem;
+        }
+        .header a { color: rgba(255,255,255,.4); text-decoration: none; font-size: 1.3rem; }
+        .header h2 { font-size: 1rem; font-weight: 600; color: rgba(255,255,255,.7); }
+
+        /* Current Number Display */
+        .current-box {
+            background: linear-gradient(135deg, rgba(255,154,0,.08), rgba(255,80,0,.04));
+            border: 1px solid rgba(255,154,0,.18);
+            border-radius: 22px;
+            padding: 1.8rem 1rem;
+            text-align: center;
+            margin-bottom: 1.2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .current-box::after {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 80%, rgba(255,154,0,.06), transparent 60%);
+            pointer-events: none;
+        }
+        .cur-label {
+            font-size: .7rem; text-transform: uppercase; letter-spacing: 2.5px;
+            color: rgba(255,154,0,.6); margin-bottom: .3rem; font-weight: 500;
+        }
+        .cur-number {
+            font-size: 5.5rem; font-weight: 900; color: #ff9a00; line-height: 1;
+            text-shadow: 0 0 40px rgba(255,154,0,.25);
+            position: relative; z-index: 1;
+        }
+        .cur-total {
+            font-size: .75rem; color: rgba(255,255,255,.3); margin-top: .5rem;
+            position: relative; z-index: 1;
+        }
+
+        /* Main Call Button */
+        .btn-next {
+            width: 100%;
+            padding: 1.15rem;
+            border: none; border-radius: 16px;
+            font-family: inherit; font-size: 1.15rem; font-weight: 700;
+            cursor: pointer; color: #fff;
+            background: linear-gradient(135deg, #ff9a00, #ff6a00);
+            box-shadow: 0 6px 25px rgba(255,130,0,.35);
+            transition: all .15s;
+            display: flex; align-items: center; justify-content: center; gap: .5rem;
+            margin-bottom: .8rem;
+        }
+        .btn-next:active { transform: scale(.97); box-shadow: 0 3px 12px rgba(255,130,0,.25); }
+
+        /* Secondary Buttons Row */
+        .btn-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .6rem;
+            margin-bottom: .8rem;
+        }
+
+        .btn {
+            padding: .85rem .8rem;
+            border: none; border-radius: 13px;
+            font-family: inherit; font-size: .85rem; font-weight: 600;
+            cursor: pointer; transition: all .15s;
+            display: flex; align-items: center; justify-content: center; gap: .35rem;
+        }
+        .btn:active { transform: scale(.97); }
+
+        .btn-recall {
+            background: rgba(0,180,255,.1);
+            border: 1px solid rgba(0,180,255,.2);
+            color: #00b4ff;
+        }
+        .btn-back {
+            background: rgba(255,255,255,.05);
+            border: 1px solid rgba(255,255,255,.1);
+            color: rgba(255,255,255,.6);
+        }
+
+        /* Call Specific Number */
+        .specific-section {
+            background: rgba(255,255,255,.03);
+            border: 1px solid rgba(255,255,255,.06);
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .specific-label {
+            font-size: .75rem; color: rgba(255,255,255,.4);
+            margin-bottom: .6rem; font-weight: 500;
+        }
+        .specific-row {
+            display: flex; gap: .5rem;
+        }
+        .specific-input {
+            flex: 1;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 11px;
+            padding: .7rem 1rem;
+            color: #fff;
+            font-family: inherit; font-size: 1.1rem; font-weight: 700;
+            text-align: center;
+            outline: none;
+            -moz-appearance: textfield;
+        }
+        .specific-input::-webkit-outer-spin-button,
+        .specific-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .specific-input:focus { border-color: rgba(0,210,255,.4); }
+
+        .btn-go {
+            background: rgba(0,210,255,.12);
+            border: 1px solid rgba(0,210,255,.25);
+            color: #00d2ff;
+            padding: .7rem 1.2rem;
+            border-radius: 11px;
+            font-family: inherit; font-size: .9rem; font-weight: 600;
+            cursor: pointer; transition: all .15s; white-space: nowrap;
+        }
+        .btn-go:active { transform: scale(.97); }
+
+        /* History */
+        .history-section {
+            margin-bottom: 1rem;
+        }
+        .history-title {
+            font-size: .75rem; color: rgba(255,255,255,.35);
+            text-transform: uppercase; letter-spacing: 1.5px;
+            margin-bottom: .6rem; font-weight: 500;
+        }
+        .history-list {
+            display: flex; flex-wrap: wrap; gap: .4rem;
+        }
+        .history-chip {
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: 9px;
+            padding: .4rem .75rem;
+            font-size: .8rem; font-weight: 600;
+            color: rgba(255,255,255,.45);
+        }
+        .history-chip:first-child {
+            background: rgba(255,154,0,.1);
+            border-color: rgba(255,154,0,.2);
+            color: #ff9a00;
+        }
+        .history-chip .chip-time {
+            font-size: .65rem; font-weight: 400;
+            color: rgba(255,255,255,.25); margin-left: .3rem;
+        }
+        .empty-msg {
+            color: rgba(255,255,255,.2); font-size: .8rem; font-style: italic;
+        }
+
+        /* Reset */
+        .btn-reset {
+            width: 100%;
+            background: rgba(255,50,50,.06);
+            border: 1px solid rgba(255,50,50,.15);
+            color: rgba(255,80,80,.7);
+            padding: .75rem;
+            border-radius: 12px;
+            font-family: inherit; font-size: .8rem; font-weight: 500;
+            cursor: pointer; transition: all .15s;
+        }
+        .btn-reset:active { transform: scale(.98); }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 1.5rem; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: #1a2744; border: 1px solid rgba(255,255,255,.1);
+            color: #fff; padding: .7rem 1.3rem; border-radius: 12px;
+            font-size: .82rem; transition: transform .3s; z-index: 100;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/">←</a>
+        <h2>👨‍⚕️ Bảng Điều Khiển</h2>
+    </div>
+
+    <!-- Số đang gọi -->
+    <div class="current-box">
+        <div class="cur-label">Số đang gọi</div>
+        <div class="cur-number" id="callingNum">---</div>
+        <div class="cur-total">Tổng đã gọi: <span id="totalCalled">0</span></div>
+    </div>
+
+    <!-- Nút gọi số tiếp -->
+    <button class="btn-next" onclick="callNext()">
+        📢 GỌI SỐ TIẾP THEO
+    </button>
+
+    <!-- Gọi lại / Lùi -->
+    <div class="btn-row">
+        <button class="btn btn-recall" onclick="recall()">🔁 Gọi lại</button>
+        <button class="btn btn-back" onclick="goBack()">⏪ Lùi 1 số</button>
+    </div>
+
+    <!-- Gọi số cụ thể -->
+    <div class="specific-section">
+        <div class="specific-label">Gọi số cụ thể</div>
+        <div class="specific-row">
+            <input type="number" class="specific-input" id="specificNum"
+                   placeholder="Nhập số..." min="1"
+                   onkeydown="if(event.key==='Enter') callSpecific()">
+            <button class="btn-go" onclick="callSpecific()">📢 Gọi</button>
+        </div>
+    </div>
+
+    <!-- Lịch sử -->
+    <div class="history-section">
+        <div class="history-title">Lịch sử gọi</div>
+        <div class="history-list" id="historyList">
+            <span class="empty-msg">Chưa gọi số nào</span>
+        </div>
+    </div>
+
+    <!-- Reset -->
+    <button class="btn-reset" onclick="resetQueue()">🗑 Reset về 0 (đầu ngày mới)</button>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const socket = io();
+
+        socket.on('queue_updated', updateUI);
+        socket.on('number_called', updateUI);
+
+        function updateUI(data) {
+            const num = data.calling_number || 0;
+            document.getElementById('callingNum').textContent =
+                num > 0 ? String(num).padStart(3, '0') : '---';
+            document.getElementById('totalCalled').textContent = data.total_called || 0;
+
+            const list = document.getElementById('historyList');
+            if (data.history && data.history.length > 0) {
+                list.innerHTML = data.history.map(h =>
+                    `<span class="history-chip">${String(h.number).padStart(3, '0')}<span class="chip-time">${h.time}</span></span>`
+                ).join('');
+            } else {
+                list.innerHTML = '<span class="empty-msg">Chưa gọi số nào</span>';
+            }
+        }
+
+        async function callNext() {
+            await fetch('/api/call-next', { method: 'POST' });
+        }
+
+        async function recall() {
+            const res = await fetch('/api/recall', { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) showToast(data.message);
+        }
+
+        async function goBack() {
+            const res = await fetch('/api/go-back', { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) showToast(data.message);
+        }
+
+        async function callSpecific() {
+            const input = document.getElementById('specificNum');
+            const num = parseInt(input.value);
+            if (!num || num <= 0) { showToast('Vui lòng nhập số hợp lệ'); return; }
+
+            await fetch('/api/call-specific', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ number: num })
+            });
+            input.value = '';
+        }
+
+        async function resetQueue() {
+            if (confirm('Reset toàn bộ về 0? Hành động này không thể hoàn tác.')) {
+                await fetch('/api/reset', { method: 'POST' });
+                showToast('Đã reset');
+            }
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        fetch('/api/status').then(r => r.json()).then(updateUI);
+    </script>
+</body>
+</html>

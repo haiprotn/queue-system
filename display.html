@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Màn Hình Gọi Số</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            height: 100vh;
+            background: linear-gradient(160deg, #080f1e 0%, #0f1d36 40%, #0a1525 100%);
+            color: #fff;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* Overlay bắt click để kích hoạt audio */
+        .audio-overlay {
+            position: fixed; inset: 0; z-index: 999;
+            background: rgba(8,15,30,.92);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+        }
+        .audio-overlay.hidden { display: none; }
+        .audio-overlay .ao-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .audio-overlay .ao-text {
+            font-size: 1.3rem; font-weight: 600;
+            color: rgba(255,255,255,.8); margin-bottom: .4rem;
+        }
+        .audio-overlay .ao-sub {
+            font-size: .9rem; color: rgba(255,255,255,.35);
+        }
+
+        /* Header */
+        .top-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1.2rem 3rem;
+            border-bottom: 1px solid rgba(255,255,255,.05);
+        }
+        .clinic-name {
+            display: flex; align-items: center; gap: .8rem;
+        }
+        .clinic-name .icon { font-size: 2rem; }
+        .clinic-name h1 {
+            font-size: 1.4rem; font-weight: 700;
+            background: linear-gradient(135deg, #fff, #80d0ff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .clock {
+            font-size: 1.8rem; font-weight: 300;
+            color: rgba(255,255,255,.5);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Main Area */
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+        }
+
+        /* Left: Big number */
+        .num-panel {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            border-right: 1px solid rgba(255,255,255,.04);
+            position: relative;
+        }
+        .num-panel::before {
+            content: '';
+            position: absolute; width: 450px; height: 450px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,154,0,.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .num-label {
+            font-size: 1.3rem; text-transform: uppercase; letter-spacing: 5px;
+            color: rgba(255,154,0,.6); margin-bottom: 1rem; font-weight: 500;
+            position: relative; z-index: 1;
+        }
+        .num-big {
+            font-size: 16rem; font-weight: 900; color: #ff9a00; line-height: .9;
+            text-shadow: 0 0 80px rgba(255,154,0,.25), 0 0 160px rgba(255,154,0,.08);
+            position: relative; z-index: 1;
+            transition: all .3s;
+        }
+        .num-big.flash {
+            animation: flashPulse .5s ease 4;
+        }
+        @keyframes flashPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .5; transform: scale(1.04); }
+        }
+
+        /* Right: History */
+        .history-panel {
+            display: flex; flex-direction: column;
+            padding: 2rem 2.5rem;
+        }
+        .hist-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+        .hist-title {
+            font-size: 1rem; text-transform: uppercase; letter-spacing: 3px;
+            color: rgba(255,255,255,.35); font-weight: 500;
+        }
+        .hist-badge {
+            background: rgba(0,210,255,.1);
+            border: 1px solid rgba(0,210,255,.18);
+            color: #00d2ff;
+            padding: .3rem .8rem; border-radius: 20px;
+            font-size: .82rem; font-weight: 600;
+        }
+        .hist-list {
+            flex: 1; display: flex; flex-direction: column; gap: .5rem;
+            overflow: hidden;
+        }
+        .hist-item {
+            display: flex; align-items: center; gap: 1rem;
+            padding: .9rem 1.3rem;
+            background: rgba(255,255,255,.025);
+            border: 1px solid rgba(255,255,255,.04);
+            border-radius: 14px;
+        }
+        .hist-item:first-child {
+            background: rgba(0,210,255,.05);
+            border-color: rgba(0,210,255,.12);
+        }
+        .hist-rank {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: rgba(255,255,255,.05);
+            display: flex; align-items: center; justify-content: center;
+            font-size: .75rem; font-weight: 600; color: rgba(255,255,255,.35);
+        }
+        .hist-item:first-child .hist-rank {
+            background: rgba(0,210,255,.12); color: #00d2ff;
+        }
+        .hist-num {
+            font-size: 1.6rem; font-weight: 800;
+            color: rgba(255,255,255,.7); flex: 1;
+        }
+        .hist-item:first-child .hist-num { color: #00d2ff; }
+        .hist-time {
+            font-size: .78rem; color: rgba(255,255,255,.25);
+        }
+        .empty-state {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            color: rgba(255,255,255,.12); font-size: 1rem;
+        }
+
+        /* Bottom */
+        .bottom-bar {
+            display: flex; align-items: center; justify-content: center; gap: 3rem;
+            padding: 1rem 3rem;
+            border-top: 1px solid rgba(255,255,255,.04);
+            background: rgba(0,0,0,.15);
+        }
+        .bstat { font-size: .85rem; color: rgba(255,255,255,.3); }
+        .bstat b { color: rgba(255,255,255,.6); font-weight: 700; }
+
+        /* Bell */
+        .bell {
+            position: fixed; top: 50%; left: 37%;
+            transform: translate(-50%, -50%);
+            font-size: 4.5rem; opacity: 0; pointer-events: none; z-index: 10;
+        }
+        .bell.ring { animation: bellRing 1.5s ease; }
+        @keyframes bellRing {
+            0% { opacity: 0; transform: translate(-50%,-50%) scale(.5); }
+            15% { opacity: 1; transform: translate(-50%,-50%) scale(1.2) rotate(-15deg); }
+            25% { transform: translate(-50%,-50%) scale(1.1) rotate(15deg); }
+            35% { transform: translate(-50%,-50%) scale(1) rotate(-10deg); }
+            45% { transform: translate(-50%,-50%) scale(1) rotate(10deg); }
+            55% { transform: translate(-50%,-50%) scale(1) rotate(0); }
+            100% { opacity: 0; transform: translate(-50%,-50%) scale(.8); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay kích hoạt audio -->
+    <div class="audio-overlay" id="audioOverlay" onclick="activateAudio()">
+        <div class="ao-icon">🔊</div>
+        <div class="ao-text">Nhấn để bật âm thanh</div>
+        <div class="ao-sub">Cần nhấn 1 lần để trình duyệt cho phép phát âm thanh</div>
+    </div>
+
+    <div class="top-bar">
+        <div class="clinic-name">
+            <span class="icon">🏥</span>
+            <h1>PHÒNG KHÁM</h1>
+        </div>
+        <div class="clock" id="clock">--:--:--</div>
+    </div>
+
+    <div class="main">
+        <div class="num-panel">
+            <div class="num-label">Số đang gọi</div>
+            <div class="num-big" id="callingNum">---</div>
+        </div>
+        <div class="history-panel">
+            <div class="hist-header">
+                <span class="hist-title">Đã gọi gần đây</span>
+                <span class="hist-badge" id="totalBadge">0 lượt</span>
+            </div>
+            <div class="hist-list" id="histList">
+                <div class="empty-state">Chưa gọi số nào</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="bstat">Tổng đã gọi: <b id="totalCount">0</b></div>
+        <div class="bstat" id="dateDisplay"></div>
+    </div>
+
+    <div class="bell" id="bell">🔔</div>
+
+    <script>
+        const socket = io();
+        let audioCtx = null;
+        let audioReady = false;
+
+        // ===== ĐỒNG HỒ =====
+        setInterval(() => {
+            document.getElementById('clock').textContent =
+                new Date().toLocaleTimeString('vi-VN');
+        }, 1000);
+
+        // Hiển thị ngày
+        document.getElementById('dateDisplay').textContent =
+            new Date().toLocaleDateString('vi-VN', {
+                weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
+            });
+
+        // ===== KÍCH HOẠT AUDIO =====
+        function activateAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // Phát 1 tiếng nhỏ để kích hoạt
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.value = 0.01;
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+
+            audioReady = true;
+            document.getElementById('audioOverlay').classList.add('hidden');
+        }
+
+        // ===== PHÁT ÂM THANH =====
+        function playChime() {
+            if (!audioCtx || !audioReady) return;
+            const now = audioCtx.currentTime;
+            const notes = [880, 660, 880]; // ding dong ding
+            notes.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.35, now + i * 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.3 + 0.55);
+                osc.start(now + i * 0.3);
+                osc.stop(now + i * 0.3 + 0.55);
+            });
+        }
+
+        function speakNumber(number) {
+            if (!('speechSynthesis' in window)) return;
+
+            const padded = String(number).padStart(3, '0');
+            const digitNames = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+            const digits = padded.split('').map(d => digitNames[parseInt(d)]).join(' ');
+
+            const text = `Mời bệnh nhân số ${digits}. Mời bệnh nhân số ${digits}, vui lòng đến phòng khám.`;
+
+            window.speechSynthesis.cancel();
+            setTimeout(() => {
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'vi-VN';
+                u.rate = 0.85;
+                u.pitch = 1.0;
+                u.volume = 1.0;
+
+                const voices = window.speechSynthesis.getVoices();
+                const vi = voices.find(v => v.lang.startsWith('vi'));
+                if (vi) u.voice = vi;
+
+                window.speechSynthesis.speak(u);
+            }, 1200);
+        }
+
+        // ===== CẬP NHẬT GIAO DIỆN =====
+        socket.on('queue_updated', updateDisplay);
+
+        socket.on('number_called', (data) => {
+            updateDisplay(data);
+            if (data.action === 'calling' && data.calling_number > 0) {
+                // Flash
+                const el = document.getElementById('callingNum');
+                el.classList.remove('flash');
+                void el.offsetWidth;
+                el.classList.add('flash');
+
+                // Bell
+                const bell = document.getElementById('bell');
+                bell.classList.remove('ring');
+                void bell.offsetWidth;
+                bell.classList.add('ring');
+
+                // Sound
+                playChime();
+                speakNumber(data.calling_number);
+            }
+        });
+
+        function updateDisplay(data) {
+            const num = data.calling_number || 0;
+            document.getElementById('callingNum').textContent =
+                num > 0 ? String(num).padStart(3, '0') : '---';
+            document.getElementById('totalBadge').textContent = (data.total_called || 0) + ' lượt';
+            document.getElementById('totalCount').textContent = data.total_called || 0;
+
+            const list = document.getElementById('histList');
+            if (data.history && data.history.length > 0) {
+                list.innerHTML = data.history.map((h, i) => `
+                    <div class="hist-item">
+                        <div class="hist-rank">${i + 1}</div>
+                        <div class="hist-num">${String(h.number).padStart(3, '0')}</div>
+                        <div class="hist-time">${h.time || ''}</div>
+                    </div>
+                `).join('');
+            } else {
+                list.innerHTML = '<div class="empty-state">Chưa gọi số nào</div>';
+            }
+        }
+
+        // Load
+        fetch('/api/status').then(r => r.json()).then(updateDisplay);
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        }
+    </script>
+</body>
+</html>
